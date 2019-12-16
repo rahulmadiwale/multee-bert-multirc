@@ -1,0 +1,83 @@
+from typing import Dict
+
+import torch
+from allennlp.data import Vocabulary
+from allennlp.models.model import Model
+from allennlp.modules import TextFieldEmbedder
+from allennlp.modules.feedforward import FeedForward
+from allennlp.nn.util import get_text_field_mask
+from allennlp.training.metrics import CategoricalAccuracy
+from overrides import overrides
+
+
+@Model.register("bert-entailment")
+class BertEntailment(Model):
+
+    def __init__(self, vocab: Vocabulary,
+                 text_field_embedder: TextFieldEmbedder,
+                 classifier: FeedForward) -> None:
+        super(BertEntailment, self).__init__(vocab)
+        self.text_field_embedder = text_field_embedder
+        self.classifier = classifier
+        self.loss = torch.nn.BCELoss()
+        self.accuracy = CategoricalAccuracy()
+        self.vocab = vocab
+
+    @overrides
+    def forward(self,
+                premises: Dict[str, torch.LongTensor],
+                # hypotheses: Dict[str, torch.LongTensor],
+                # paragraph: Dict[str, torch.LongTensor],
+                question: Dict[str, torch.LongTensor],
+                # answer_correctness_mask: torch.IntTensor = None,
+                relevance_presence_mask: torch.Tensor = None) -> Dict[str, torch.Tensor]:
+
+        def squeeze_tokens(tokens):
+            for key in tokens.keys():
+                tokens[key] = torch.squeeze(tokens[key])
+
+        # squeeze_tokens(question)
+        squeeze_tokens(premises)
+        # squeeze_tokens(hypotheses)
+
+        print("question: ", question.keys(), [x.shape for _, x in question.items()])
+        print("premises: ", premises.keys(), [x.shape for _, x in premises.items()])
+        # print("hypotheses: ", hypotheses.keys(), [x.shape for _, x in hypotheses.items()])
+        # print("answer_correctness_mask", answer_correctness_mask.shape, answer_correctness_mask)
+        print("relevance_presence_mask", relevance_presence_mask.shape, relevance_presence_mask)
+
+        question_mask = get_text_field_mask({'tokens': question['tokens']})
+        premises_mask = get_text_field_mask({'tokens': premises['tokens']})
+        # hypotheses_mask = get_text_field_mask({'tokens': hypotheses['tokens']})
+
+        print(question_mask.shape, premises_mask.shape)
+
+        premises_with_questions = torch.cat(
+            (premises['tokens'], question['tokens'][:, 1:].repeat(premises['tokens'].shape[0], 1)), 1)
+        premises_with_questions_mask = torch.cat(
+            (premises_mask, question_mask[:, 1:].repeat(premises['tokens'].shape[0], 1)), 1)
+        print("CONCAT: ", premises_with_questions.shape)
+        print("CONCAT MASK: ", premises_with_questions_mask.shape)
+
+        premises_CLS_embedding = self.text_field_embedder({
+            'tokens': premises_with_questions,
+            'mask': premises_with_questions_mask
+        })[:, 0, :]
+        print("CLS Embedding: ", premises_CLS_embedding.shape)
+
+
+        logits = self.classifier(premises_CLS_embedding)
+        print("LOGITS: ", logits.shape, logits.reshape(1, -1))
+        print("Labels: ", relevance_presence_mask.shape, relevance_presence_mask)
+        output_dict = {"logits": logits}
+
+        if relevance_presence_mask is not None:
+            loss = self.loss(logits, relevance_presence_mask.reshape(-1, 1))
+            output_dict["loss"] = loss
+            print("Loss: ", loss)
+
+        return output_dict
+
+    @overrides
+    def get_metrics(self, reset: bool = False) -> Dict[str, float]:
+        return {"accuracy": self.accuracy.get_metric(reset)}
