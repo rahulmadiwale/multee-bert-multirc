@@ -10,8 +10,8 @@
             },
         }
   },
-  "train_data_path": "data/train-sample.jsonl",
-  "validation_data_path": "data/dev-sample.jsonl",
+  "train_data_path": "data/multirc-train-processed-questions.jsonl",
+  "validation_data_path": "data/multirc-dev-processed-questions.jsonl",
   "model": {
     "type": "bert-entailment",
     "text_field_embedder": {
