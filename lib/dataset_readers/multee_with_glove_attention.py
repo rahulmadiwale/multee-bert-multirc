@@ -17,12 +17,13 @@ from allennlp.data.tokenizers import Tokenizer, WordTokenizer, Token
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-@DatasetReader.register("multiple_correct_mcq_entailment")
-class MultipleCorrectMcqEntailmentReader(DatasetReader):
+@DatasetReader.register("multiple_correct_mcq_multee_with_glove_attention")
+class MultipleCorrectMcqEntailmentReaderMulteeGloveAttention(DatasetReader):
 
     def __init__(self,
                  # tokenizer: Tokenizer = None,
-                 token_indexers: Dict[str, TokenIndexer] = None,
+                 token_indexers:  Dict[str, TokenIndexer] = None,
+                 glove_token_indexers: Dict[str, TokenIndexer] = None,
                  premise_max_tokens: int = 65,
                  hypothesis_max_tokens: int = 65,
                  lazy: bool = False) -> None:
@@ -32,6 +33,7 @@ class MultipleCorrectMcqEntailmentReader(DatasetReader):
         bert_token_indexer = token_indexers["tokens"]
         self._tokenizer = bert_token_indexer.wordpiece_tokenizer
         self._token_indexers = token_indexers or {'tokens': SingleIdTokenIndexer()}
+        self.glove_token_indexer = glove_token_indexers or {'tokens': SingleIdTokenIndexer()}
 
     @overrides
     def _read(self, file_path: str):
@@ -78,13 +80,32 @@ class MultipleCorrectMcqEntailmentReader(DatasetReader):
             premises_field = empty_stub.empty_field()
         fields['premises'] = premises_field
 
-        # hypotheses_text_fields = [TextField(hypothesis_tokens, self._token_indexers)
-        #                         for hypothesis_tokens in hypotheses_tokens]
-        # hypotheses_field = ListField(hypotheses_text_fields)
-        # fields['hypotheses'] = hypotheses_field
+        hypotheses_text_fields = [TextField(hypothesis_tokens, self._token_indexers)
+                                for hypothesis_tokens in hypotheses_tokens]
+        hypotheses_field = ListField(hypotheses_text_fields)
+        fields['hypotheses'] = hypotheses_field
 
-        #question_pieces = self._tokenizer("[CLS] " + question + " [SEP]")
-        question_pieces = self._tokenizer(question)
+        attention_premises_tokens = [list(map(Token, premise.split()[-self._premise_max_tokens:]))
+                           for premise in premises]
+        attention_hypotheses_tokens = [list(map(Token, hypothesis.split()[-self._hypothesis_max_tokens:]))
+                             for hypothesis in hypotheses]
+
+        if premises:
+            attention_premises_text_fields = [TextField(attention_premise_tokens, self.glove_token_indexer)
+                                    for attention_premise_tokens in attention_premises_tokens]
+            attention_premises_field = ListField(attention_premises_text_fields)
+        else:
+            att_empty_stub = ListField([TextField([Token('dummy')], self.glove_token_indexer)])
+            attention_premises_field = att_empty_stub.empty_field()
+        fields['attention_premises'] = attention_premises_field
+
+        attention_hypotheses_text_fields = [TextField(attention_hypothesis_tokens, self.glove_token_indexer)
+                                  for attention_hypothesis_tokens in attention_hypotheses_tokens]
+        attention_hypotheses_field = ListField(attention_hypotheses_text_fields)
+        fields['attention_hypotheses'] = attention_hypotheses_field
+
+
+        question_pieces = self._tokenizer("question")
         question_tokens = [Token(x) for x in question_pieces]
         question_field  = TextField(question_tokens, self._token_indexers)
 
@@ -98,11 +119,11 @@ class MultipleCorrectMcqEntailmentReader(DatasetReader):
             fields['relevance_presence_mask'] = ArrayField(np.array(relevance_presence_mask))
 
         # If answer_indices labels are available
-        # if answer_indices is not None:
-        #     answer_correctness_mask = np.zeros(len(hypotheses))
-        #     for answer_index in answer_indices:
-        #         answer_correctness_mask[answer_index] = 1
-        #     fields['answer_correctness_mask'] = ArrayField(answer_correctness_mask, padding_value=-1, dtype=np.long)
+        if answer_indices is not None:
+            answer_correctness_mask = np.zeros(len(hypotheses))
+            for answer_index in answer_indices:
+                answer_correctness_mask[answer_index] = 1
+            fields['answer_correctness_mask'] = ArrayField(answer_correctness_mask, padding_value=-1, dtype=np.long)
 
         # paragraph_tokens = [token for premise_tokens in premises_tokens for token in premise_tokens]
         # paragraph_text_field = TextField(paragraph_tokens, self._token_indexers)

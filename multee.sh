@@ -10,4 +10,4 @@ source /home/rmadiwale/venv/nlp-qa/bin/activate
 # cd /home/rmadiwale/nlp-question-answering/
 
 # Run the experiment.
-allennlp train configs/multee_single_branch.jsonnet -s multee_single_branch --include-package lib
+allennlp train configs/multee.jsonnet -s multee-bert --include-package lib

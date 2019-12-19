@@ -10,8 +10,8 @@
             },
         }
   },
-  "train_data_path": "data/multirc-train-processed-questions.jsonl",
-  "validation_data_path": "data/multirc-dev-processed-questions.jsonl",
+  "train_data_path": "data/train-sample.jsonl",
+  "validation_data_path": "data/dev-sample.jsonl",
   "model": {
     "type": "bert-entailment",
     "text_field_embedder": {
@@ -47,7 +47,7 @@
         ],
   },
   "trainer": {
-    "num_epochs": 1,
+    "num_epochs": 100,
     "patience": 5,
     "cuda_device": -1,
     "grad_clipping": 5.0,

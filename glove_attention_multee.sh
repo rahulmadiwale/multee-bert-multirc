@@ -4,10 +4,10 @@
          # Asking time. "gpu" currently let you run an experiment upto 36 hours.
 
 # Activating conda environment to run tensorflow (python 2.7)
-source /home/rmadiwale/venv/nlp-qa/bin/activate
+source /home/rmadiwale/advanced_project/multee/bin/activate
 
 # Change the working directory to the project directory
 # cd /home/rmadiwale/nlp-question-answering/
 
 # Run the experiment.
-allennlp train configs/bert_entailment_without_encoder.jsonnet -s bert_entailment_without_encoder --include-package lib
+allennlp train configs/multee_with_glove_attention.jsonnet -s glove --include-package lib

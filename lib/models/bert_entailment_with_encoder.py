@@ -3,22 +3,24 @@ from typing import Dict
 import torch
 from allennlp.data import Vocabulary
 from allennlp.models.model import Model
-from allennlp.modules import TextFieldEmbedder
+from allennlp.modules import TextFieldEmbedder, Seq2VecEncoder
 from allennlp.modules.feedforward import FeedForward
 from allennlp.nn.util import get_text_field_mask
 from allennlp.training.metrics import BooleanAccuracy
 from overrides import overrides
 
 
-@Model.register("bert-entailment")
-class BertEntailment(Model):
+@Model.register("bert-entailment-with-encoder")
+class BertEntailmentWithEncoder(Model):
 
     def __init__(self, vocab: Vocabulary,
                  text_field_embedder: TextFieldEmbedder,
-                 classifier: FeedForward) -> None:
-        super(BertEntailment, self).__init__(vocab)
+                 classifier: FeedForward,
+                 encoder: Seq2VecEncoder) -> None:
+        super(BertEntailmentWithEncoder, self).__init__(vocab)
         self.text_field_embedder = text_field_embedder
         self.classifier = classifier
+        self.encoder = encoder
         self.loss = torch.nn.MSELoss()
         self.accuracy = BooleanAccuracy()
         self.vocab = vocab
@@ -59,28 +61,33 @@ class BertEntailment(Model):
         #print("CONCAT: ", premises_with_questions.shape)
         #print("CONCAT MASK: ", premises_with_questions_mask.shape)
 
-        premises_CLS_embedding = self.text_field_embedder({
+        premises_embedding = self.text_field_embedder({
             'tokens': premises_with_questions,
             'mask': premises_with_questions_mask
-        })[:, 0, :]
-        #print("CLS Embedding: ", premises_CLS_embedding.shape)
+        })
+        # print("Premises Embedding: ", premises_embedding.shape)
+        encoded_premises = self.encoder(premises_embedding, premises_with_questions_mask)
+        # print(encoded_premises.shape)
 
-
-        logits = self.classifier(premises_CLS_embedding)
+        logits = self.classifier(encoded_premises)
         #print("LOGITS: ", logits.shape, logits.reshape(1, -1))
         #print("Labels: ", relevance_presence_mask.shape, relevance_presence_mask)
         output_dict = {"logits": logits}
 
-        print("Logits: ", logits.reshape(1, -1))
+        # print(logits)
 
         if relevance_presence_mask is not None:
             loss = self.loss(logits, relevance_presence_mask.reshape(-1, 1))
             output_dict["loss"] = loss
-            print("LABELS: ", relevance_presence_mask.reshape(1, -1))
+            # print("\nLogits: ", logits.reshape(1, -1))
+            # print("\nLABELS: ", relevance_presence_mask.reshape(1, -1))
+            # print("\nLOSS: ", loss)
             self.accuracy(logits.round(), relevance_presence_mask.reshape(-1, 1))
 
         return output_dict
 
     @overrides
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
-        return {"accuracy": self.accuracy.get_metric(reset)}
+        return {
+            "accuracy": self.accuracy.get_metric(reset)
+        }

@@ -10,4 +10,4 @@ source /home/rmadiwale/venv/nlp-qa/bin/activate
 # cd /home/rmadiwale/nlp-question-answering/
 
 # Run the experiment.
-allennlp train configs/bert_entailment_without_encoder.jsonnet -s bert_entailment_without_encoder --include-package lib
+allennlp train configs/bert_entailment_with_encoder.jsonnet -s bert_entailment_with_encoder --include-package lib
